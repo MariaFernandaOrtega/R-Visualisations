@@ -1,0 +1,279 @@
+---
+title: "Life_Satisfaction_Gallup"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+```{r, echo=FALSE}
+library(scales)
+#library(tidyverse)
+library(readr)
+library(readxl)
+library(ggplot2)
+library(purrr)
+library(plotly)
+library(feasts)
+library(tsibble)
+library(lubridate)
+library(tidyverse)
+
+library(TSstudio)
+library(plotly)
+library(gt)
+library(gtExtras)
+library(kableExtra)
+```
+
+
+```{r, echo=FALSE}
+
+sage <- read_excel("SAGE_2020_update_2021_12_08.xlsx")
+
+lf_gallup<- read_excel("GallupAnalytics_Export_20230209_100201_lifetoday.xlsx")
+
+
+#u<-unique(sage$Country)
+
+
+```
+
+```{r, echo=FALSE}
+library('stringr')
+
+colnames(lf_gallup)[1] <- "Country"
+colnames(lf_gallup)[2] <- "Year"
+colnames(lf_gallup)[5] <- "life_satisfaction"
+#e<- unique(lf_gallup$Country)
+
+lf_final_gallup<- lf_gallup %>% select(Country,Year,life_satisfaction) %>% na.omit() %>% filter(Year <=2020)
+lf_final_gallup$Country <- str_replace_all(lf_final_gallup$Country,'United Kingdom of Great Britain and Northern Ireland','United Kingdom')
+lf_final_gallup$Country <- str_replace_all(lf_final_gallup$Country,'United States of America','United States')
+
+sage_final<- sage %>% select(Country, Year, `Solidarity Index`,`Inward Solidarity Index`,`Outward Solidarity Index`, `GDP per capita`, `Agency Index` )
+
+sage_gallup<- sage_final %>% merge(lf_final_gallup)
+
+#agency
+sage_gallup_agency<-sage_gallup %>% select(Year,`Agency Index`,life_satisfaction, Country)
+
+sage_gallup_agency<-sage_gallup_agency %>% mutate(life_satisfaction = as.numeric(life_satisfaction)/10)
+
+lf_final_agency_g7_<- sage_gallup_agency%>% filter(Country=="France"|Country=="Germany"|Country=="Italy"|Country=="United Kingdom"|Country=="Japan"|Country=="United States"|Country=="Canada") 
+
+#Solidarity
+sage_gallup_solidarity<- sage_gallup %>% select(Year,life_satisfaction, Country, `Solidarity Index`)
+
+sage_gallup_solidarity<-sage_gallup_solidarity %>% mutate(life_satisfaction = as.numeric(life_satisfaction)/10)
+
+
+lf_final_solidarity_g7<- sage_gallup_solidarity%>% filter(Country=="France"|Country=="Germany"|Country=="Italy"|Country=="United Kingdom"|Country=="Japan"|Country=="United States"|Country=="Canada") 
+
+##Material Gain
+
+sage_gallup_material<- sage_gallup %>% select(Year,life_satisfaction, Country, `GDP per capita`)
+
+sage_gallup_material<-sage_gallup_material %>% mutate(life_satisfaction = as.numeric(life_satisfaction)/10)
+
+
+lf_final_material_g7<- sage_gallup_material%>% filter(Country=="France"|Country=="Germany"|Country=="Italy"|Country=="United Kingdom"|Country=="Japan"|Country=="United States"|Country=="Canada") %>% 
+  mutate(gdp_s = rescale(`GDP per capita`))
+
+```
+
+This report revisits the original SAGE dashboard database to calculate correlations between "life satisfaction" (variable taken from Gallup data) and "Agency", "Solidarity" and "GDP per capita". 
+
+## Agency-Life Satisfaction for G7
+
+
+
+```{r, echo=FALSE}
+library(hrbrthemes)
+priceColor <- rgb(0.2, 0.6, 0.9, 1)
+colors<-c("Agency"="dodgerblue","Life Satisfaction"="#69b3a2")
+
+fig<-lf_final_agency_g7_ %>% 
+  ggplot( aes(x=Year))+ geom_line(aes(y=`Agency Index`, color= "dodgerblue")) + 
+  geom_line(aes(y=life_satisfaction, color="#69b3a2" ))  +   
+       scale_colour_manual(labels = c("Agency", "Life Satisfaction"), values = c("dodgerblue", "#69b3a2"))+ 
+    theme_minimal()+
+    ggtitle("Agency-Life Satisfaction 2006-2020 (G7)")  +
+    facet_wrap(~Country) + theme(legend.title=element_blank())+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+       # Position
+fig
+
+
+```
+
+
+
+In these charts we can observe that G7 countries have higher values for “life satisfaction” when compared to "Agency" throughout the years with the exception of Italy. Germany stands out among the graphs because of the high positive correlation between the two variables (0.89). Canada has a negative correlation (-0.31) and Japan and the UK have low positive correlations. .
+
+
+```{r, echo=FALSE}
+
+m<-lf_final_agency_g7_ %>%
+  group_by(Country) %>%
+  summarize('Cor' =cor(`Agency Index`, life_satisfaction))
+
+
+cor_1<-m%>%
+  gt() %>% 
+    gt_theme_538()  %>% 
+  tab_header(title = "Correlation Agency-Life Satisfaction 2006-2020")
+cor_1
+```
+
+
+## Solidarity-Life Satisfaction for G7
+
+```{r, echo=FALSE}
+
+fig_sol<-lf_final_solidarity_g7 %>% 
+  ggplot( aes(x=Year))+ geom_line(aes(y=`Solidarity Index`, color= "dodgerblue")) + 
+  geom_line(aes(y=life_satisfaction, color="#69b3a2" ))  +   
+       scale_colour_manual(labels = c("Solidarity", "Life Satisfaction"), values = c("dodgerblue", "#69b3a2"))+ 
+    theme_minimal()+
+    ggtitle("Solidarity-Life Satisfaction 2006-2020 (G7)")  +
+    facet_wrap(~Country) + theme(legend.title=element_blank())+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+  
+       # Position
+fig_sol
+
+```
+
+
+In these graphs we can notice that in the G7 countries "life satisfaction" tends to be higher than "solidarity" over the years. For Canada, Japan and the United States there is a high positive correlation, while Germany, Italy and the United Kingdom show negative correlations. 
+
+```{r, echo=FALSE}
+s<-lf_final_solidarity_g7 %>%
+  group_by(Country) %>%
+  summarize('Cor'=cor(`Solidarity Index`, life_satisfaction))
+
+
+cor_2<-s%>%
+  gt() %>% 
+    gt_theme_538()  %>% 
+  tab_header(title = "Correlation Solidarity-Life Satisfaction 2006-2020")
+cor_2
+
+```
+
+## Material Gain-Life Satisfaction for G7
+
+```{r, echo=FALSE}
+
+W<-lf_final_material_g7 %>%
+  group_by(Country) %>%
+  summarize('Cor'=cor(`GDP per capita`, life_satisfaction))
+
+
+cor_3<-W%>%
+  gt() %>% 
+    gt_theme_538()  %>% 
+  tab_header(title = "Correlation GDP per capita
+             -Life Satisfaction 2006-2020")
+cor_3
+
+```
+
+Most G7 countries (Canada, France, Japan, USA) show a negative correlation between life satisfaction and GDP per capita. Germany and Italy are the exception, with high positive correlations of 0.76 and 0.68 respectively.
+
+
+## 2020 Agency - Life Satisfaction
+
+Looking at a specific year (2020) and taking into account 109 countries, Agency and Life Satisfaction show a high positive correlation (0.73).
+
+
+```{r, echo=FALSE}
+sage_gallup_2020<- sage_gallup %>% filter(Year==2020) %>% mutate(life_satisfaction = as.numeric(life_satisfaction)/10)
+
+
+p2<- ggplot(sage_gallup_2020, aes(x = life_satisfaction , y = `Agency Index`)) + 
+  geom_smooth(method = "lm", color = "khaki3", fill = "khaki1") + geom_point(color = "goldenrod", alpha = .6) + 
+  labs(title = "Life Satisfaction-Agency 2020") + theme(plot.title = element_text(lineheight = 0.5)) + 
+  labs(x = "Life Satisfaction", y = "Agency Index") + theme_minimal() + geom_hline(aes(yintercept = mean(`Agency Index`)), color = "dimgrey") + geom_vline(aes(xintercept = mean(life_satisfaction )), color = "wheat4")
+
+fig_final_ag<-ggplotly(p2)%>% style(text= paste('</br> Country: ', sage_gallup_2020$Country,
+                      '</br> Agency SAGE: ',sage_gallup_2020$`Agency Index`,
+                      '</br> Life Satisfaction: ', sage_gallup_2020$life_satisfaction))
+fig_final_ag
+
+
+
+```
+
+```{r, echo=FALSE}
+cor_life_agency <- cor.test(sage_gallup_2020$`Agency Index`, sage_gallup_2020$life_satisfaction, method = "pearson")
+
+cor_life_agency
+```
+
+## 2020 Solidarity - Life Satisfaction
+
+Looking at a specific year (2020) and taking into account 87 countries, Solidarity and Life Satisfaction show a strong positive correlation (0.67).
+
+
+```{r, echo=FALSE}
+sage_gallup_2020<- sage_gallup %>% filter(Year==2020) %>% mutate(life_satisfaction = as.numeric(life_satisfaction)/10)
+
+
+p3<- ggplot(sage_gallup_2020, aes(x = life_satisfaction , y = `Solidarity Index`)) + 
+  geom_smooth(method = "lm", color = "lightblue4", fill = "lightblue") + geom_point(color = "dodgerblue3", alpha = .6) + 
+  labs(title = "Life Satisfaction-Solidarity 2020") + theme(plot.title = element_text(lineheight = 0.5)) + 
+  labs(x = "Life Satisfaction", y = "Solidarity Index") + theme_minimal() + geom_hline(aes(yintercept = mean(`Solidarity Index`)), color = "dimgrey") + geom_vline(aes(xintercept = mean(life_satisfaction )), color = "wheat4")
+
+fig_final_soli<-ggplotly(p3)%>% style(text= paste('</br> Country: ', sage_gallup_2020$Country,
+                      '</br> Solidarity SAGE: ',sage_gallup_2020$`Solidarity Index`,
+                      '</br> Life Satisfaction: ', sage_gallup_2020$life_satisfaction))
+fig_final_soli
+```
+
+
+```{r, echo=FALSE}
+
+cor_life_soli <- cor.test(sage_gallup_2020$`Solidarity Index`, sage_gallup_2020$life_satisfaction, method = "pearson")
+
+cor_life_soli
+```
+
+## 2020 GDP per capita - Life Satisfaction
+
+Looking at a specific year (2020) and taking into account 106 countries, GDP per capita and Life Satisfaction show a strong positive correlation (0.78).
+
+
+```{r, echo=FALSE}
+sage_gallup_2020<- sage_gallup %>% filter(Year==2020) %>% mutate(life_satisfaction = as.numeric(life_satisfaction)/10)
+
+
+p4<- ggplot(sage_gallup_2020, aes(x = life_satisfaction , y = `GDP per capita`)) + 
+  geom_smooth(method = "lm", color = "khaki3", fill = "coral") + geom_point(color = "coral3", alpha = .6) + 
+  labs(title = "Life Satisfaction-GDP per capita 2020") + theme(plot.title = element_text(lineheight = 0.5)) + 
+  labs(x = "Life Satisfaction", y = "GDP per capita") + theme_minimal() + geom_hline(aes(yintercept = mean(`Solidarity Index`)), color = "dimgrey") + geom_vline(aes(xintercept = mean(life_satisfaction )), color = "wheat4")
+
+fig_final_mat<-ggplotly(p4)%>% style(text= paste('</br> Country: ', sage_gallup_2020$Country,
+                      '</br> GDP per capita SAGE: ',sage_gallup_2020$`GDP per capita`,
+                      '</br> Life Satisfaction: ', sage_gallup_2020$life_satisfaction))
+fig_final_mat
+```
+
+
+```{r, echo=FALSE}
+
+cor_life_mat <- cor.test(sage_gallup_2020$`GDP per capita`, sage_gallup_2020$life_satisfaction, method = "pearson")
+
+cor_life_mat
+```
+
+
+
